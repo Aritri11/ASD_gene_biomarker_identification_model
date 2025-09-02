@@ -183,3 +183,127 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+################################################################################################################################################################
+
+
+
+
+import pandas as pd
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.feature_selection import VarianceThreshold
+from sklearn.model_selection import StratifiedKFold, train_test_split, cross_val_score
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
+from imblearn.over_sampling import SMOTE
+from sklearn.preprocessing import StandardScaler, quantile_transform
+from hyperopt import fmin, tpe, hp, Trials, STATUS_OK
+
+
+def load_data(file_path):
+    df = pd.read_csv(file_path)
+    X = df.drop(columns=["Sample", "Condition"])
+    y = df["Condition"].map({"ASD": 1, "Control": 0})
+    return X, y, df
+
+
+def main():
+    # Step 1: Load dataset
+    file_path = "ML_ready_dataset_filtered .csv"
+    X, y, df = load_data(file_path)
+    features = df.drop(columns=["Sample", "Condition"])
+
+    # Quantile normalization
+    features_qn = pd.DataFrame(
+        quantile_transform(features, axis=0, n_quantiles=100,
+                           output_distribution='normal', copy=True),
+        index=features.index, columns=features.columns
+    )
+
+    # Z-score normalization
+    scaler = StandardScaler()
+    features_scaled = pd.DataFrame(
+        scaler.fit_transform(features_qn),
+        index=features_qn.index, columns=features_qn.columns
+    )
+
+    # Step 2: Train-test split
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.3, stratify=y, random_state=42
+    )
+
+    # --- Handle imbalance with SMOTE ---
+    smote = SMOTE(sampling_strategy={0: 120, 1: 100}, random_state=42)
+    X_train_res, y_train_res = smote.fit_resample(X_train, y_train)
+
+    print("Before SMOTE:", y_train.value_counts())
+    # print("After SMOTE:", y_train_res.value_counts())
+
+    # Step 3: Apply VarianceThreshold
+    varthres = VarianceThreshold(threshold=0.09)
+    X_train_selected = varthres.fit_transform(X_train_res)
+    X_test_selected = varthres.transform(X_test)
+
+    selected_features = X.columns[varthres.get_support()]
+    print(f"Number of features after VarianceThreshold: {X_train_selected.shape[1]}")
+
+    # Step 4: Hyperopt search space
+    space = {
+        "C": hp.loguniform("C", np.log(1e-3), np.log(10)),
+        "kernel": hp.choice("kernel", ["linear", "rbf", "poly", "sigmoid"]),
+        "gamma": hp.choice("gamma", ["scale", "auto"]),
+        "degree": hp.quniform("degree", 2, 5, 1)  # only relevant if kernel="poly"
+    }
+
+    def objective(params):
+        # Cast degree to int
+        params["degree"] = int(params["degree"])
+        svm_model = SVC(**params, random_state=42)
+
+        cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+        scores = cross_val_score(svm_model, X_train_selected, y_train_res, cv=cv, scoring="accuracy")
+        mean_acc = scores.mean()
+
+        return {"loss": -mean_acc, "status": STATUS_OK}
+
+    # Step 5: Run Hyperopt
+    trials = Trials()
+    best = fmin(
+        fn=objective,
+        space=space,
+        algo=tpe.suggest,
+        max_evals=30,  # increase for better search
+        trials=trials,
+        rstate=np.random.default_rng(42)
+    )
+
+    print("\nBest Hyperparameters:", best)
+
+    # Step 6: Train final model with best params
+    best_params = {
+        "C": best["C"],
+        "kernel": ["linear", "rbf", "poly", "sigmoid"][best["kernel"]],
+        "gamma": ["scale", "auto"][best["gamma"]],
+        "degree": int(best["degree"])
+    }
+
+    final_model = SVC(**best_params, random_state=42)
+    final_model.fit(X_train_selected, y_train_res)
+
+    # Step 7: Evaluate on test set
+    y_pred = final_model.predict(X_test_selected)
+    test_acc = accuracy_score(y_test, y_pred)
+    print(f"\nTest Accuracy: {test_acc*100:.3f}")
+    print("\nClassification Report (test set):")
+    print(classification_report(y_test, y_pred))
+    print("Confusion Matrix:")
+    print(confusion_matrix(y_test, y_pred))
+
+
+if __name__ == "__main__":
+    main()
