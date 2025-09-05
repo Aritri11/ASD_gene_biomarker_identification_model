@@ -1,3 +1,12 @@
+########## Gene Expression Classification with XGBoost and SHAP Interpretation ###########
+#This code trains an XGBoost classifier on gene expression data to distinguish between classes (ASD vs control).
+#It evaluates model performance and applies SHAP to interpret feature contributions.
+
+#Author: Aritri Baidya
+#Supervisor: Dr. Shyam Sundar Rajagopalan
+
+
+#Importing the modules
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,7 +27,7 @@ np.random.seed(SEED)
 # np.random.default_rng(SEED)
 os.environ["PYTHONHASHSEED"] = str(SEED)
 
-
+#Loading the data and Normalization
 def load_data(file_path):
     df = pd.read_csv(file_path)
     features = df.drop(columns=["Sample", "Condition"])
@@ -41,7 +50,7 @@ def load_data(file_path):
     y = df["Condition"].map({"ASD": 1, "Control": 0})
     return X, y, df
 
-
+#For SHAP Analysis
 def run_shap_analysis(model, X_train_res, X_test, y_test):
     """
     Runs SHAP analysis on a trained model and generates plots.
@@ -133,24 +142,24 @@ def main():
     file_path = "ML_ready_dataset_filtered.csv"
     X, y, df = load_data(file_path)
 
-    # Step 2: Train-test split
+    # Step 2: Train-test split (Train: 70% and Test: 30%)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.3, stratify=y, random_state=42)
 
-    # Step 2b: Variance threshold
-    vt = VarianceThreshold(threshold=0.7)
+    # Step 3: Variance threshold for Feature Selection
+    vt = VarianceThreshold(threshold=0.7) #removes features whose variance is ≤ 0.7
     X_train_vt = vt.fit_transform(X_train)
     X_test_vt = vt.transform(X_test)
     print(f"Features after VarianceThreshold: {X_train_vt.shape[1]}")
     selected_vt_features = X_train.columns[vt.get_support()]
 
-    # Step 3: Handle imbalance
+    # Step 4: Handles Class imbalance
     smote = SMOTE(sampling_strategy={0: 51, 1: 63}, k_neighbors=8, random_state=42)
     X_train_res, y_train_res = smote.fit_resample(X_train_vt, y_train)
     print("Before SMOTE:", y_train.value_counts())
     print("After SMOTE:", y_train_res.value_counts())
 
-    # Step 4: Feature selection
+    # Step 5: Feature selection to get best features
     selector = SelectKBest(score_func=mutual_info_classif, k=80)
     X_train_selected = selector.fit_transform(X_train_res, y_train_res)
     X_test_selected = selector.transform(X_test_vt)
@@ -158,7 +167,7 @@ def main():
     selected_features = selected_vt_features[selector.get_support()]
     print(f"Number of features after selection: {X_train_selected.shape[1]}")
 
-    # Step 5: Hyperopt space
+    # Step 6: Hyperopt space
     space = {
         'n_estimators': hp.quniform('n_estimators', 50, 300, 10),
         'max_depth': hp.quniform('max_depth', 3, 10, 1),
@@ -186,18 +195,18 @@ def main():
 
         return {'loss': -np.mean(f1_scores), 'status': STATUS_OK, 'params': params}
 
-    # Step 6: Hyperopt
+    # Step 7: Hyperopt (optimization)
     trials = Trials()
     best = fmin(fn=objective, space=space, algo=tpe.suggest,
                 max_evals=30, trials=trials, rstate=np.random.default_rng(42))
     best_trial = sorted(trials.results, key=lambda x: x['loss'])[0]
     best_params = best_trial['params']
 
-    # Step 7: Final model
+    # Step 8: Final model (XGBoost model using all the optimal parameters from Hyperopt)
     clf = XGBClassifier(**best_params, random_state=42, eval_metric="logloss")
     clf.fit(X_train_selected, y_train_res)
 
-    # Step 8: Evaluation
+    # Step 9: Evaluation of model performance
     print("\nBest XGBoost Params:", best_params)
     y_pred_train=clf.predict(X_train_selected)
     y_pred_test=clf.predict(X_test_selected)
