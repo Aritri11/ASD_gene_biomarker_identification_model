@@ -192,8 +192,21 @@ def main():
             clf.fit(x_tr, y_tr)
             y_pred = clf.predict(x_val_fold)
             f1_scores.append(f1_score(y_val_fold, y_pred, average='macro'))
+    mean_f1 = np.mean(f1_scores)
+    std_f1 = np.std(f1_scores)
 
-        return {'loss': -np.mean(f1_scores), 'status': STATUS_OK, 'params': params}
+    # Print for tracking
+    print(f"Params: {params} | Mean F1: {mean_f1:.4f} | Std F1: {std_f1:.4f}")
+
+    return {
+        'loss': -mean_f1,
+        'status': STATUS_OK,
+        'params': params,
+        'mean_f1': mean_f1,
+        'std_f1': std_f1
+    }
+
+        # return {'loss': -np.mean(f1_scores), 'status': STATUS_OK, 'params': params}
 
     # Step 7: Hyperopt (optimization)
     trials = Trials()
@@ -208,6 +221,8 @@ def main():
 
     # Step 9: Evaluation of model performance
     print("\nBest XGBoost Params:", best_params)
+    print(f"Cross-val Mean F1: {best_trial['mean_f1']:.4f}")
+    print(f"Cross-val Std F1: {best_trial['std_f1']:.4f}")
     y_pred_train=clf.predict(X_train_selected)
     y_pred_test=clf.predict(X_test_selected)
     print(f"Train Accuracy: {accuracy_score(y_train_res,y_pred_train )*100: .2f}%")
