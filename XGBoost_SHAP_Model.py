@@ -192,19 +192,19 @@ def main():
             clf.fit(x_tr, y_tr)
             y_pred = clf.predict(x_val_fold)
             f1_scores.append(f1_score(y_val_fold, y_pred, average='macro'))
-    mean_f1 = np.mean(f1_scores)
-    std_f1 = np.std(f1_scores)
+        mean_f1 = np.mean(f1_scores)
+        std_f1 = np.std(f1_scores)
 
-    # Print for tracking
-    print(f"Params: {params} | Mean F1: {mean_f1:.4f} | Std F1: {std_f1:.4f}")
+        # Print for tracking
+        print(f"Params: {params} | Mean F1: {mean_f1:.4f} | Std F1: {std_f1:.4f}")
 
-    return {
-        'loss': -mean_f1,
-        'status': STATUS_OK,
-        'params': params,
-        'mean_f1': mean_f1,
-        'std_f1': std_f1
-    }
+        return {
+            'loss': -mean_f1,
+            'status': STATUS_OK,
+            'params': params,
+            'mean_f1': mean_f1,
+            'std_f1': std_f1
+        }
 
         # return {'loss': -np.mean(f1_scores), 'status': STATUS_OK, 'params': params}
 
