@@ -24,8 +24,9 @@ import random
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
-# np.random.default_rng(SEED)
 os.environ["PYTHONHASHSEED"] = str(SEED)
+os.environ["HYPEROPT_FMIN_SEED"] = str(SEED)
+os.environ["XGBOOST_RANDOM_STATE"] = str(SEED)
 
 #Loading the data and Normalization
 def load_data(file_path):
@@ -195,7 +196,7 @@ def main():
         mean_f1 = np.mean(f1_scores)
         std_f1 = np.std(f1_scores)
 
-        # Print for tracking
+        # Print for tracking the parameters
         print(f"Params: {params} | Mean F1: {mean_f1:.4f} | Std F1: {std_f1:.4f}")
 
         return {
@@ -206,7 +207,6 @@ def main():
             'std_f1': std_f1
         }
 
-        # return {'loss': -np.mean(f1_scores), 'status': STATUS_OK, 'params': params}
 
     # Step 7: Hyperopt (optimization)
     trials = Trials()
@@ -251,6 +251,56 @@ def main():
     run_shap_analysis(clf, pd.DataFrame(X_train_selected, columns=selected_features),
                       pd.DataFrame(X_test_selected, columns=selected_features), y_test)
 
+    # --- Final single test sample prediction ---
+    print("\n### Single Test Sample Prediction ###")
+
+    # Test sample choice
+    sample_idx = 5
+
+    # To make sure that the index is valid
+    if sample_idx < len(X_test_selected):
+        X_single = X_test_selected[sample_idx].reshape(1, -1)
+        y_single_true = y_test.iloc[sample_idx]
+
+        # Using the trained final model
+        y_single_pred = clf.predict(X_single)[0]
+        y_single_prob = clf.predict_proba(X_single)[0, 1]
+
+        print(f"Test Sample Index: {sample_idx}")
+        print(f"True Label: {y_single_true} ({'ASD' if y_single_true == 1 else 'Control'})")
+        print(f"Predicted Label: {y_single_pred} ({'ASD' if y_single_pred == 1 else 'Control'})")
+        print(f"Predicted Probability (ASD): {y_single_prob:.4f}")
+    else:
+        print(f"Invalid sample_idx {sample_idx}. Maximum available is {len(X_test_selected) - 1}.")
+
 
 if __name__ == "__main__":
     main()
+
+
+#--------Results interpreted as-----------
+#Best XGBoost Params: {'colsample_bytree': 0.6817467614858493, 'gamma': 0.10741104861225978, 'learning_rate': 0.05020810119372847, 'max_depth': 8, 'n_estimators': 160, 'subsample': 0.9309660772445034}
+# Cross-val Mean F1: 0.8681
+# Cross-val Std F1: 0.1194
+# Train Accuracy:  100.00%
+# Test Accuracy:  86.67%
+
+# Classification Report (Test):
+#               precision    recall  f1-score   support
+
+#      Control       0.92      0.71      0.80        17
+#          ASD       0.84      0.96      0.90        28
+
+#     accuracy                           0.87        45
+#    macro avg       0.88      0.84      0.85        45
+# weighted avg       0.87      0.87      0.86        45
+
+# [[12  5]
+#  [ 1 27]]
+# ROC-AUC score: 0.83
+
+ ### Single Test Sample Prediction ###
+# Test Sample Index: 5
+# True Label: 1 (ASD)
+# Predicted Label: 1 (ASD)
+# Predicted Probability (ASD): 0.9383
