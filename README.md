@@ -1,4 +1,4 @@
-Machine Learning–Driven Biomarker Gene Prediction for Autism Spectrum Disorder Using RNA-Seq Data
+# **Machine Learning–Driven Biomarker Gene Prediction for Autism Spectrum Disorder Using Microarray Data**
 
 Goal: Identify genes whose expression levels can serve as biomarkers to distinguish ASD (Autism Spectrum Disorder) patients from Control individuals.
 
