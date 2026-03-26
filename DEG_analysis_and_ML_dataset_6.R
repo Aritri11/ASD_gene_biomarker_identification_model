@@ -45,14 +45,56 @@ df <- read_csv(long_format_file, show_col_types = FALSE)
 cat("✅ Loaded:", nrow(df), "rows.\n\n")
 
 # ----------------------------
-# 6.3 Pivot to Wide Format (genes x samples)
+# 6.3 Probe Deduplication (highest-variance probe per gene)
+#     then Pivot to Wide Format (genes x samples)
 # ----------------------------
+# Strategy: for genes measured by multiple probes on the Illumina
+# HT-12 chip, keep only the probe with the highest variance across
+# all samples. This probe captures the most biological variability
+# and is most informative for differential expression and ML.
+# Averaging (the previous strategy) dilutes signal by mixing
+# informative probes with poorly hybridizing ones.
+# This is consistent with the deduplication strategy in Step2_improved.R.
+# ----------------------------
+cat("Selecting highest-variance probe per gene...\n")
+
+library(data.table)
+
+# Work with data.table for efficient per-probe variance calculation
+df_clean <- df %>%
+  dplyr::filter(!is.na(Symbol), Symbol != "", !is.na(Probe_ID))
+
+# Calculate variance of each probe across all samples
+probe_var <- df_clean %>%
+  dplyr::group_by(Probe_ID) %>%
+  dplyr::summarise(Probe_Variance = var(Expression, na.rm = TRUE),
+                   .groups = "drop")
+
+# Attach variance to main data
+df_clean <- df_clean %>%
+  dplyr::left_join(probe_var, by = "Probe_ID")
+
+# For each gene, keep only the probe with the highest variance
+# (one best probe selected globally, then used for all samples)
+best_probe_per_gene <- df_clean %>%
+  dplyr::group_by(Symbol) %>%
+  dplyr::slice_max(order_by = Probe_Variance, n = 1, with_ties = FALSE) %>%
+  dplyr::ungroup() %>%
+  dplyr::select(Symbol, Probe_ID) %>%
+  dplyr::distinct()
+
+cat("✅ Best probe selected for", nrow(best_probe_per_gene), "genes.\n")
+
+# Filter long-format data to keep only the best probe per gene
+df_dedup <- df_clean %>%
+  dplyr::inner_join(best_probe_per_gene, by = c("Symbol", "Probe_ID")) %>%
+  dplyr::select(Symbol, Sample, Expression)
+
+cat("✅ Long-format rows after deduplication:", nrow(df_dedup), "\n\n")
+
+# Pivot to wide format (genes x samples)
 cat("Pivoting to wide format...\n")
-df_expr <- df %>%
-  filter(!is.na(Symbol), Symbol != "") %>%
-  group_by(Symbol, Sample) %>%
-  summarise(Expression = mean(Expression, na.rm = TRUE),
-            .groups = "drop") %>%
+df_expr <- df_dedup %>%
   pivot_wider(names_from  = Sample,
               values_from = Expression) %>%
   column_to_rownames("Symbol")
@@ -317,7 +359,7 @@ volcano_plot <- ggplot(volcano_data,
            y     = -log10(PVAL_THRESHOLD) + 0.3,
            label = paste0("FDR = ", PVAL_THRESHOLD * 100, "%"),
            size  = 3) +
-  labs(title    = "Volcano Plot — ASD vs Control (limma, no SVA)",
+  labs(title    = "Volcano Plot — ASD vs Control (limma)",
        subtitle = paste0("Thresholds: |Log2FC| > ", FC_THRESHOLD,
                          ", adj_pval < ", PVAL_THRESHOLD,
                          " | DEGs: ", nrow(sig_degs)),
