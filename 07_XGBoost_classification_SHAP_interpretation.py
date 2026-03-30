@@ -31,6 +31,11 @@ os.environ["PYTHONHASHSEED"] = str(SEED)
 os.environ["HYPEROPT_FMIN_SEED"] = str(SEED)
 os.environ["XGBOOST_RANDOM_STATE"] = str(SEED)
 
+
+# Output directory for all saved plots
+OUTPUT_DIR = "shap_plots"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
 #Loading the data and Normalization
 def load_data(file_path):
     df = pd.read_csv(file_path)
@@ -57,17 +62,44 @@ def load_data(file_path):
 #For SHAP Analysis
 def run_shap_analysis(model, X_train_res, X_test, y_test):
     """
-    Runs SHAP analysis on a trained model and generates plots.
-    """
+        Runs SHAP analysis on a trained model, displays all plots,
+        and saves each one as a high-resolution PNG to OUTPUT_DIR.
+
+        Saved files:
+            shap_plots/01_shap_summary_bar.png
+            shap_plots/02_shap_summary_beeswarm.png
+            shap_plots/03_shap_waterfall_control.png
+            shap_plots/04_shap_waterfall_asd.png
+            shap_plots/05_shap_violin.png
+            shap_plots/06_shap_feature_importance_bar.png
+        """
 
     explainer = shap.TreeExplainer(model, X_train_res.sample(50, random_state=42))
     shap_values = explainer.shap_values(X_test)
 
-    # --- SHAP summary plots ---
-    shap.summary_plot(shap_values, X_test, plot_type="bar", show=True)
-    shap.summary_plot(shap_values, X_test, show=True)
+    # Plot 1 — SHAP summary bar plot
+    shap.summary_plot(shap_values, X_test, plot_type="bar", show=False)
+    fig = plt.gcf()
+    fig.set_size_inches(10, 8)
+    plt.tight_layout()
+    save_path = os.path.join(OUTPUT_DIR, "01_shap_summary_bar.png")
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Saved: {save_path}")
+    plt.show()
+    plt.close()
 
-    # --- Waterfall plot (Control) ---
+    # Plot 2 — SHAP beeswarm summary plot
+    shap.summary_plot(shap_values, X_test, show=False)
+    fig = plt.gcf()
+    fig.set_size_inches(10, 8)
+    plt.tight_layout()
+    save_path = os.path.join(OUTPUT_DIR, "02_shap_summary_beeswarm.png")
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Saved: {save_path}")
+    plt.show()
+    plt.close()
+
+    # Plot 3 — Waterfall plot for first Control sample
     neg_pos = np.where(y_test.values == 0)[0][0]
     shap.waterfall_plot(
         shap.Explanation(
@@ -83,9 +115,13 @@ def run_shap_analysis(model, X_train_res, X_test, y_test):
     fig = plt.gcf()
     fig.set_size_inches(10, 8)
     plt.subplots_adjust(left=0.25)
+    save_path = os.path.join(OUTPUT_DIR, "03_shap_waterfall_control.png")
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Saved: {save_path}")
     plt.show()
+    plt.close()
 
-    # --- Waterfall plot (ASD) ---
+    # Plot 4 — Waterfall plot for first ASD sample
     pos_pos = np.where(y_test.values == 1)[0][0]
     shap.waterfall_plot(
         shap.Explanation(
@@ -101,10 +137,13 @@ def run_shap_analysis(model, X_train_res, X_test, y_test):
     fig = plt.gcf()
     fig.set_size_inches(10, 8)
     plt.subplots_adjust(left=0.25)
+    save_path = os.path.join(OUTPUT_DIR, "04_shap_waterfall_asd.png")
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Saved: {save_path}")
     plt.show()
+    plt.close()
 
-
-    # --- Violin plot ---
+    # Plot 5 — Violin plot
     shap.plots.violin(
         shap.Explanation(
             values=shap_values,
@@ -119,10 +158,13 @@ def run_shap_analysis(model, X_train_res, X_test, y_test):
     fig = plt.gcf()
     fig.set_size_inches(10, 8)
     plt.subplots_adjust(left=0.25)
+    save_path = os.path.join(OUTPUT_DIR, "05_shap_violin.png")
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Saved: {save_path}")
     plt.show()
+    plt.close()
 
-
-    # --- Feature importance bar ---
+    # Plot 6 — Feature importance bar (SHAP bar plot)
     shap.plots.bar(
         shap.Explanation(
             values=shap_values,
@@ -137,7 +179,13 @@ def run_shap_analysis(model, X_train_res, X_test, y_test):
     fig = plt.gcf()
     fig.set_size_inches(10, 8)
     plt.subplots_adjust(left=0.25)
+    save_path = os.path.join(OUTPUT_DIR, "06_shap_feature_importance_bar.png")
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Saved: {save_path}")
     plt.show()
+    plt.close()
+
+    print(f"\n✅ All SHAP plots saved to: {os.path.abspath(OUTPUT_DIR)}/")
 
 
 
@@ -260,7 +308,11 @@ def main():
     plt.title("ROC Curve - Final XGBoost Model")
     plt.legend(loc="lower right")
     plt.grid(alpha=0.3)
+    roc_save_path = os.path.join(OUTPUT_DIR, "00_roc_curve.png")
+    plt.savefig(roc_save_path, dpi=300, bbox_inches="tight")
+    print(f"Saved: {roc_save_path}")
     plt.show()
+    plt.close()
 
     # --- Run SHAP analysis ---
     run_shap_analysis(clf, pd.DataFrame(X_train_selected, columns=selected_features),
