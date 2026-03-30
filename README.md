@@ -1,4 +1,4 @@
-# Machine Learning–Driven Biomarker Gene Prediction for Autism Spectrum Disorder from Microarray Data
+# Machine Learning–Driven Biomarker Gene Prediction for Autism Spectrum Disorder Using Microarray Data
 
 **Goal**: Identify genes whose expression levels can serve as biomarkers to distinguish ASD (Autism Spectrum Disorder) patients from neurotypical Control individuals using the GSE42133 blood microarray dataset (Illumina HT-12 V4).
 
