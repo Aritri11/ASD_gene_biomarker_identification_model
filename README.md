@@ -14,7 +14,7 @@ The pipeline processes **147 blood microarray samples** (91 ASD, 56 Control) fro
 - Test Accuracy: **84.44%**
 - ROC-AUC: **0.86**
 - Cross-validation Macro F1: **0.8494 ± 0.0986**
-- Significant DEGs identified: **~150 genes**
+- Significant DEGs identified: **~250 genes**
 - GSEA: **133 GO BP gene sets**, **21 KEGG pathways** enriched
 
 ---
