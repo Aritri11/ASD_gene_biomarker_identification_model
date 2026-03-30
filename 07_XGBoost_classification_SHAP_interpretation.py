@@ -11,15 +11,18 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import shap
+from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score, roc_auc_score, roc_curve, auc
 from sklearn.preprocessing import StandardScaler, quantile_transform
-from sklearn.feature_selection import SelectKBest, mutual_info_classif, VarianceThreshold
+from sklearn.feature_selection import SelectKBest, mutual_info_classif, VarianceThreshold, f_classif, SelectFromModel
 from imblearn.over_sampling import SMOTE
 from hyperopt import fmin, tpe, hp, Trials, STATUS_OK
 from xgboost import XGBClassifier
 import os
 import random
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 SEED = 42
 random.seed(SEED)
@@ -31,7 +34,7 @@ os.environ["XGBOOST_RANDOM_STATE"] = str(SEED)
 #Loading the data and Normalization
 def load_data(file_path):
     df = pd.read_csv(file_path)
-    features = df.drop(columns=["Sample", "Condition"])
+    features = df.drop(columns=["Sample", "Condition", "Label"])
     print("No of features: ", features.shape[1])
 
     # Quantile normalization
@@ -140,7 +143,7 @@ def run_shap_analysis(model, X_train_res, X_test, y_test):
 
 def main():
     # Step 1: Load dataset
-    file_path = "ML_ready_dataset_filtered.csv"
+    file_path = "ML_ready_dataset_new.csv"
     X, y, df = load_data(file_path)
 
     # Step 2: Train-test split (Train: 70% and Test: 30%)
@@ -155,18 +158,30 @@ def main():
     selected_vt_features = X_train.columns[vt.get_support()]
 
     # Step 4: Handles Class imbalance
-    smote = SMOTE(sampling_strategy={0: 51, 1: 63}, k_neighbors=8, random_state=42)
+    smote = SMOTE(sampling_strategy={0: 52, 1: 63}, k_neighbors=8, random_state=42)
     X_train_res, y_train_res = smote.fit_resample(X_train_vt, y_train)
     print("Before SMOTE:", y_train.value_counts())
     print("After SMOTE:", y_train_res.value_counts())
 
     # Step 5: Feature selection to get best features
-    selector = SelectKBest(score_func=mutual_info_classif, k=80)
-    X_train_selected = selector.fit_transform(X_train_res, y_train_res)
+    # Step 1 — fit ExtraTrees to learn feature importances
+    etc = ExtraTreesClassifier(
+        n_estimators=200,
+        max_features="sqrt",
+        class_weight="balanced",  # handles ASD/Control imbalance
+        random_state=42
+    )
+    etc.fit(X_train_res, y_train_res)
+
+    # Step 2 — select features above median importance
+    # "median" threshold keeps roughly half the features
+    # adjust to "mean" if you want fewer, or "0.5*mean" for more
+    selector = SelectFromModel(etc, prefit=True, threshold="median")
+    X_train_selected = selector.transform(X_train_res)
     X_test_selected = selector.transform(X_test_vt)
 
+    print(f"Features selected by ExtraTrees: {X_train_selected.shape[1]}")
     selected_features = selected_vt_features[selector.get_support()]
-    print(f"Number of features after selection: {X_train_selected.shape[1]}")
 
     # Step 6: Hyperopt space
     space = {
@@ -279,28 +294,28 @@ if __name__ == "__main__":
 
 
 #--------Results interpreted as-----------
-#Best XGBoost Params: {'colsample_bytree': 0.6817467614858493, 'gamma': 0.10741104861225978, 'learning_rate': 0.05020810119372847, 'max_depth': 8, 'n_estimators': 160, 'subsample': 0.9309660772445034}
-# Cross-val Mean F1: 0.8681
-# Cross-val Std F1: 0.1194
+# Best XGBoost Params: {'colsample_bytree': 0.604211347909434, 'gamma': 0.06341652957252641, 'learning_rate': 0.17246701094614406, 'max_depth': 8, 'n_estimators': 180, 'subsample': 0.9992276466890877}
+# Cross-val Mean F1: 0.8494
+# Cross-val Std F1: 0.0986
 # Train Accuracy:  100.00%
-# Test Accuracy:  86.67%
-
+# Test Accuracy:  84.44%
+#
 # Classification Report (Test):
 #               precision    recall  f1-score   support
-
-#      Control       0.92      0.71      0.80        17
-#          ASD       0.84      0.96      0.90        28
-
-#     accuracy                           0.87        45
-#    macro avg       0.88      0.84      0.85        45
-# weighted avg       0.87      0.87      0.86        45
-
+#
+#      Control       0.86      0.71      0.77        17
+#          ASD       0.84      0.93      0.88        28
+#
+#     accuracy                           0.84        45
+#    macro avg       0.85      0.82      0.83        45
+# weighted avg       0.85      0.84      0.84        45
+#
 # [[12  5]
-#  [ 1 27]]
-# ROC-AUC score: 0.83
-
- ### Single Test Sample Prediction ###
+#  [ 2 26]]
+# ROC-AUC score: 0.86
+#
+# ### Single Test Sample Prediction ###
 # Test Sample Index: 5
 # True Label: 1 (ASD)
 # Predicted Label: 1 (ASD)
-# Predicted Probability (ASD): 0.9383
+# Predicted Probability (ASD): 0.9920
